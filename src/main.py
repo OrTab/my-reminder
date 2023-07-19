@@ -21,16 +21,18 @@ from config import (
 from twilio.rest import Client
 
 LAST_FETCH_TIME = None
-TIME_TO_CALL_BEFORE_EVENT = {"value": 12, "unit": "minutes"}
+TIME_TO_CALL_BEFORE_EVENT = {"value": 1, "unit": "minutes"}
 
 
 def call(event):
-    print(event)
-    return
     account_sid = TWILIO_ACCOUNT_ID
     auth_token = TWILIO_AUTH_TOKEN
     client = Client(account_sid, auth_token)
-    custom_message = CUSTOM_MESSAGE.format(event["summary"])
+    custom_message = CUSTOM_MESSAGE.format(
+        TIME_TO_CALL_BEFORE_EVENT["value"],
+        TIME_TO_CALL_BEFORE_EVENT["unit"],
+        event["summary"],
+    )
     twiml = f'<Response><Say loop="{REPEAT_MESSAGE_VALUE}">{custom_message}</Say></Response>'
     call = client.calls.create(twiml=twiml, to=MY_NUMBER, from_=MY_TWILIO_NUMBER)
 
