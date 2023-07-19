@@ -7,7 +7,8 @@
 
 # Mac/OSX
 .DS_Store
-my-reminder-cred.json
+credentials.json
+config.py
 events.json
 # Windows
 Thumbs.db
