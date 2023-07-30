@@ -14,17 +14,20 @@ from config import (
     REPEAT_MESSAGE_VALUE,
     SCOPES,
     MAX_EVENTS_RESULTS,
-    FETCH_PERIOD,
+    CACHE_PERIOD,
+    SLEEP_PERIOD,
     CREDENTIALS_FILE_PATH,
-    CACHED_EVENTS_FILE_PATH,
 )
 from twilio.rest import Client
+from time import sleep
 
 LAST_FETCH_TIME = None
-TIME_TO_CALL_BEFORE_EVENT = {"value": 1, "unit": "minutes"}
+TIME_TO_CALL_BEFORE_EVENT = {"value": 2, "unit": "minutes"}
+cached_events = None
 
 
 def call(event):
+    global cached_events
     account_sid = TWILIO_ACCOUNT_ID
     auth_token = TWILIO_AUTH_TOKEN
     client = Client(account_sid, auth_token)
@@ -34,7 +37,19 @@ def call(event):
         event["summary"],
     )
     twiml = f'<Response><Say loop="{REPEAT_MESSAGE_VALUE}">{custom_message}</Say></Response>'
+    
     call = client.calls.create(twiml=twiml, to=MY_NUMBER, from_=MY_TWILIO_NUMBER)
+    print(call.status)
+    if(isinstance(cached_events, list)):
+        update_is_call = lambda _event: event if(_event['id'] != event['id']) else {**_event , 'is_call': True}
+        updated_events_iterator = map(update_is_call , cached_events)
+        cached_events = list(updated_events_iterator)
+        print(cached_events)
+
+
+    
+    
+
 
 
 def get_time_difference_per_unit(time_diff_sec):
@@ -47,18 +62,12 @@ def get_time_difference_per_unit(time_diff_sec):
 
 
 def get_calendar_events(user_email):
-    global LAST_FETCH_TIME
-    should_fetch = True and (
-        LAST_FETCH_TIME is None or time.time() - LAST_FETCH_TIME > FETCH_PERIOD
+    global LAST_FETCH_TIME,cached_events
+    should_fetch = True or (
+        LAST_FETCH_TIME is None or time.time() - LAST_FETCH_TIME > CACHE_PERIOD
     )
     print("should_fetch: ", should_fetch)
-    events_result = None
-    if not should_fetch and os.path.exists(CACHED_EVENTS_FILE_PATH):
-        with open(CACHED_EVENTS_FILE_PATH, "r") as file:
-            json_data = file.read()
-            events_result = json.loads(json_data)
-
-    if should_fetch or not events_result:
+    if should_fetch or not cached_events:
         LAST_FETCH_TIME = time.time()
         print("fetching")
         credentials = service_account.Credentials.from_service_account_file(
@@ -68,7 +77,7 @@ def get_calendar_events(user_email):
 
         now = datetime.datetime.utcnow().isoformat() + "Z"
 
-        events_result = (
+        response_events_result = (
             service.events()
             .list(
                 calendarId=user_email,
@@ -81,12 +90,9 @@ def get_calendar_events(user_email):
             .execute()
         )
 
-        json_data = json.dumps(events_result)
+        cached_events = response_events_result.get("items", [])
 
-        with open(CACHED_EVENTS_FILE_PATH, "w") as file:
-            file.write(json_data)
-
-    events = events_result.get("items", [])
+    events = cached_events
     if events:
         for event in events:
             event_time = event["start"]["dateTime"]
@@ -99,11 +105,13 @@ def get_calendar_events(user_email):
             print(time_difference)
             if (
                 time_difference <= TIME_TO_CALL_BEFORE_EVENT["value"]
-                and time_difference > 0
+                and time_difference > 0 or True
             ):
                 call(event)
                 return
 
 
 if __name__ == "__main__":
-    get_calendar_events(MY_EMAIL)
+    # while(True):
+        get_calendar_events(MY_EMAIL)
+        # sleep(SLEEP_PERIOD)
