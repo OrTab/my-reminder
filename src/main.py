@@ -14,7 +14,7 @@ from config import (
     REPEAT_MESSAGE_VALUE,
     SCOPES,
     MAX_EVENTS_RESULTS,
-    CACHE_PERIOD,
+    FETCH_PERIOD,
     SLEEP_PERIOD,
     CREDENTIALS_FILE_PATH,
 )
@@ -48,7 +48,7 @@ def call(event):
         )
         updated_events_iterator = map(update_is_call, cached_events)
         cached_events = list(updated_events_iterator)
-        print(cached_events)
+        print("called made")
 
 
 def get_time_difference_per_unit(time_diff_sec):
@@ -63,7 +63,7 @@ def get_time_difference_per_unit(time_diff_sec):
 def get_calendar_events(user_email):
     global LAST_FETCH_TIME, cached_events
     should_fetch = True or (
-        LAST_FETCH_TIME is None or time.time() - LAST_FETCH_TIME > CACHE_PERIOD
+        LAST_FETCH_TIME is None or time.time() - LAST_FETCH_TIME > FETCH_PERIOD
     )
     print("should_fetch: ", should_fetch)
     if should_fetch or not cached_events:
@@ -94,6 +94,9 @@ def get_calendar_events(user_email):
     events = cached_events
     if events:
         for event in events:
+            event_time_start = event["start"]
+            if "dateTime" not in event_time_start:
+                continue
             event_time = event["start"]["dateTime"]
             event_timestamp = datetime.datetime.fromisoformat(
                 event_time[:-1]
@@ -101,13 +104,17 @@ def get_calendar_events(user_email):
             current_datetime_timestamp = datetime.datetime.utcnow().timestamp()
             time_difference_in_seconds = event_timestamp - current_datetime_timestamp
             time_difference = get_time_difference_per_unit(time_difference_in_seconds)
-            print(time_difference)
             if (
                 time_difference <= TIME_TO_CALL_BEFORE_EVENT["value"]
                 and time_difference > 0
             ):
                 call(event)
                 return
+        print(
+            "No meeting in the next {} {}".format(
+                TIME_TO_CALL_BEFORE_EVENT["value"], TIME_TO_CALL_BEFORE_EVENT["unit"]
+            )
+        )
 
 
 if __name__ == "__main__":
