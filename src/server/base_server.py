@@ -23,6 +23,9 @@ class MyHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.handle_request()
 
+    def do_POST(self):
+        self.handle_request()
+
 
 def get_server(port, host_name):
     server_address = (host_name, port)

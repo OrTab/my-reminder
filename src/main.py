@@ -118,4 +118,6 @@ def get_calendar_events(user_email):
 
 
 if __name__ == "__main__":
+    # while True:
     get_calendar_events(MY_EMAIL)
+    # time.sleep(10)

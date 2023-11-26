@@ -1,4 +1,4 @@
-from server.base_server import get_server, populate_request_handlers
+from base_server import get_server, populate_request_handlers
 
 host_name = "localhost"
 port = 8080
