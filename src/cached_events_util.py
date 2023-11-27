@@ -9,4 +9,3 @@ def update_event_property(
         )
         updated_events_iterator = map(updated_event_cb, events["data"])
         events["data"] = list(updated_events_iterator)
-        print(events)

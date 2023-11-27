@@ -19,12 +19,11 @@ from config import (
     CREDENTIALS_FILE_PATH,
 )
 from twilio.rest import Client
-from time import sleep
 from server.server import init_server
 from cached_events_util import update_event_property
 
 LAST_FETCH_TIME = None
-TIME_TO_CALL_BEFORE_EVENT = {"value": 300, "unit": "minutes"}
+TIME_TO_CALL_BEFORE_EVENT = {"value": 1, "unit": "minutes"}
 cached_events = None
 
 
@@ -61,11 +60,11 @@ def get_time_difference_per_unit(time_diff_sec):
 
 def get_calendar_events(user_email):
     global LAST_FETCH_TIME, cached_events
-    should_fetch = True or (
+    should_fetch = (
         LAST_FETCH_TIME is None or time.time() - LAST_FETCH_TIME > FETCH_PERIOD
-    )
-    print("should_fetch: ", should_fetch)
-    if should_fetch or not cached_events["data"]:
+    ) or not cached_events["data"]
+    print("Should fetch: ", should_fetch)
+    if should_fetch:
         LAST_FETCH_TIME = time.time()
         print("fetching")
         credentials = service_account.Credentials.from_service_account_file(
@@ -121,5 +120,6 @@ if __name__ == "__main__":
     cached_events = manager.dict()
     server_process = Process(target=init_server, args=(cached_events,))
     server_process.start()
-    get_calendar_events(MY_EMAIL)
-    server_process.join()
+    while True:
+        get_calendar_events(MY_EMAIL)
+        time.sleep(SLEEP_PERIOD)
