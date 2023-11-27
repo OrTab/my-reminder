@@ -1,9 +1,8 @@
-import os
 import datetime
 import time
+from multiprocessing import Process, Manager
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-import json
 from config import (
     MY_EMAIL,
     TWILIO_ACCOUNT_ID,
@@ -16,18 +15,21 @@ from config import (
     MAX_EVENTS_RESULTS,
     FETCH_PERIOD,
     SLEEP_PERIOD,
+    WEB_HOOK_URL,
     CREDENTIALS_FILE_PATH,
 )
 from twilio.rest import Client
 from time import sleep
+from server.server import init_server
+from cached_events_util import update_event_property
 
 LAST_FETCH_TIME = None
-TIME_TO_CALL_BEFORE_EVENT = {"value": 2, "unit": "minutes"}
+TIME_TO_CALL_BEFORE_EVENT = {"value": 300, "unit": "minutes"}
 cached_events = None
 
 
 def call(event):
-    global cached_events
+    global cached_event
     account_sid = TWILIO_ACCOUNT_ID
     auth_token = TWILIO_AUTH_TOKEN
     client = Client(account_sid, auth_token)
@@ -38,17 +40,14 @@ def call(event):
     )
     twiml = f'<Response><Say loop="{REPEAT_MESSAGE_VALUE}">{custom_message}</Say></Response>'
 
-    call = client.calls.create(twiml=twiml, to=MY_NUMBER, from_=MY_TWILIO_NUMBER)
-    print(call.status)
-    if isinstance(cached_events, list):
-        update_is_call = (
-            lambda _event: event
-            if (_event["id"] != event["id"])
-            else {**_event, "is_call": True}
-        )
-        updated_events_iterator = map(update_is_call, cached_events)
-        cached_events = list(updated_events_iterator)
-        print("called made")
+    call = client.calls.create(
+        twiml=twiml,
+        to=MY_NUMBER,
+        from_=MY_TWILIO_NUMBER,
+        status_callback=WEB_HOOK_URL,
+        status_callback_event=["initiated", "ringing", "answered", "completed"],
+    )
+    update_event_property(cached_events, "id", event["id"], "call_id", call.sid)
 
 
 def get_time_difference_per_unit(time_diff_sec):
@@ -66,7 +65,7 @@ def get_calendar_events(user_email):
         LAST_FETCH_TIME is None or time.time() - LAST_FETCH_TIME > FETCH_PERIOD
     )
     print("should_fetch: ", should_fetch)
-    if should_fetch or not cached_events:
+    if should_fetch or not cached_events["data"]:
         LAST_FETCH_TIME = time.time()
         print("fetching")
         credentials = service_account.Credentials.from_service_account_file(
@@ -89,9 +88,9 @@ def get_calendar_events(user_email):
             .execute()
         )
 
-        cached_events = response_events_result.get("items", [])
+        cached_events["data"] = response_events_result.get("items", [])
 
-    events = cached_events
+    events = cached_events["data"]
     if events:
         for event in events:
             event_time_start = event["start"]
@@ -118,6 +117,9 @@ def get_calendar_events(user_email):
 
 
 if __name__ == "__main__":
-    # while True:
+    manager = Manager()
+    cached_events = manager.dict()
+    server_process = Process(target=init_server, args=(cached_events,))
+    server_process.start()
     get_calendar_events(MY_EMAIL)
-    # time.sleep(10)
+    server_process.join()

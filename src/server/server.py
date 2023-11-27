@@ -1,7 +1,15 @@
-from base_server import get_server, populate_request_handlers
+import sys
+import os
+
+parent_dir = os.path.abspath("..")
+sys.path.append(parent_dir)
+from urllib.parse import parse_qs
+from server.base_server import get_server, populate_request_handlers
 
 host_name = "localhost"
 port = 8080
+
+cached_events = None
 
 
 def handle_get(req):
@@ -14,12 +22,26 @@ def handle_get(req):
     )
 
 
-def init_server():
-    populate_request_handlers("GET", "/*", handle_get)
+def handle_post(req):
+    content_length = int(req.headers["Content-Length"])
+    data = req.rfile.read(content_length)
+    call_data = parse_qs(data.decode("utf-8"))
+    call_id = call_data["CallSid"][0]
+    call_status = call_data["CallStatus"][0]
+    target_event = None
+    for event in cached_events["data"]:
+        if event["call_id"] == call_id:
+            target_event = event
+            break
+
+    if target_event != None:
+        print(call_status)
 
 
-if __name__ == "__main__":
-    init_server()
+def init_server(events):
+    global cached_events
+    cached_events = events
+    populate_request_handlers("POST", "/call", handle_post)
     server = get_server(port, host_name)
     print("server listening http://{}:{}".format(host_name, port))
     try:
